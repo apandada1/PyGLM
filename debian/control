@@ -6,7 +6,7 @@ Standards-Version: 4.5.0
 Maintainer: Norbert <nrbrtx@gmail.com>
 
 Package: python3-pyglm
-Architecture: amd64
+Architecture: any
 Depends: ${python3:Depends}, ${misc:Depends}, ${shlibs:Depends}
 Description: OpenGL Mathematics library for Python
  OpenGL Mathematics library for Python packaged for Ubuntu
