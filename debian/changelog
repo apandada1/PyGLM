@@ -1,3 +1,9 @@
+python3-pyglm (2.5.1-rev2) focal; urgency=medium
+
+  * v2.5.1-rev2
+
+ -- Archisman Panigrahi <apandada1@gmail.com>  Mon, 18 Oct 2021 18:23:53 +0530
+ 
 python3-pyglm (2.5.0) focal; urgency=medium
 
   * v2.5.0
