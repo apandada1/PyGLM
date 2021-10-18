@@ -597,6 +597,13 @@ mat3x3_init(mat<3, 3, T> *self, PyObject *args, PyObject *)
 			self->super_type = PyGLM_Mat_PTI_Get0(3, 3, uint32, arg1);
 			return 0;
 		}
+
+		// quaternions
+		PyGLM_PTI_Init0(arg1, PyGLM_T_QUA | PyGLM_PTI_GetDT(T));
+		if (!PyGLM_PTI_IsNone(0)) {
+			self->super_type = glm::mat3_cast(PyGLM_Qua_PTI_Get0(T, arg1));
+			return 0;
+		}
 		PyErr_SetString(PyExc_TypeError, "invalid argument type(s) for mat3x3()");
 		return -1;
 	}
@@ -1138,6 +1145,13 @@ mat4x4_init(mat<4, 4, T> *self, PyObject *args, PyObject *)
 			self->super_type = PyGLM_Mat_PTI_Get0(4, 4, uint32, arg1);
 			return 0;
 		}
+
+		// quaternions
+		PyGLM_PTI_Init0(arg1, PyGLM_T_QUA | PyGLM_PTI_GetDT(T));
+		if (!PyGLM_PTI_IsNone(0)) {
+			self->super_type = glm::mat4_cast(PyGLM_Qua_PTI_Get0(T, arg1));
+			return 0;
+		}
 		PyErr_SetString(PyExc_TypeError, "invalid argument type(s) for mat4x4()");
 		return -1;
 	}
@@ -1334,6 +1348,21 @@ mat_sub(PyObject *obj1, PyObject *obj2)
 	return pack_mat<C, R, T>(o - o2);
 }
 
+template<int S, typename T>
+static inline PyObject*
+mat_hmul(glm::mat<S, S, T> o, PyObject* obj2) {
+	constexpr int Shom = S - 1;
+	PyGLM_PTI_Init0(obj2, (get_vec_PTI_info<Shom, T>()));
+
+	if (!PyGLM_PTI_IsNone(0)) { // obj2 is a row_type in homogenous coordinates
+		glm::vec<S, T> o2 = glm::vec<S, T>(PyGLM_Vec_PTI_Get0(Shom, T, obj2), static_cast<T>(1));
+
+		return pack_vec(glm::vec<Shom, T>(o * o2));
+	}
+
+	Py_RETURN_NOTIMPLEMENTED;
+}
+
 template<int C, int R, typename T>
 static PyObject *
 mat_mul(PyObject *obj1, PyObject *obj2)
@@ -1360,7 +1389,7 @@ mat_mul(PyObject *obj1, PyObject *obj2)
 		return pack_mat(o * PyGLM_Number_FromPyObject<T>(obj2));
 	}
 
-	PyGLM_PTI_Init0(obj2, (get_vec_PTI_info<C, T>()) | (get_mat_PTI_info<2, C, T>()) | (get_mat_PTI_info<3, C, T>()) | (get_mat_PTI_info<4, C, T>()))
+	PyGLM_PTI_Init0(obj2, (get_vec_PTI_info<C, T>()) | (get_mat_PTI_info<2, C, T>()) | (get_mat_PTI_info<3, C, T>()) | (get_mat_PTI_info<4, C, T>()));
 
 	if (PyGLM_Vec_PTI_Check0(C, T, obj2)) { // obj2 is a row_type
 		glm::vec<C, T> o2 = PyGLM_Vec_PTI_Get0(C, T, obj2);
@@ -1385,6 +1414,11 @@ mat_mul(PyObject *obj1, PyObject *obj2)
 
 		return pack_mat(o * o2);
 	}
+
+	if (C == R) {
+		return mat_hmul<C, T>(o, obj2);
+	}
+	
 
 	Py_RETURN_NOTIMPLEMENTED;
 }

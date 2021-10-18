@@ -442,6 +442,14 @@ def test_mat_types():
             for args in gen_args("#uM{C}{R}".format(C=C, R=R) + "V{R}".format(R=R)*C + "_" + "_".join(["M{C}{R}M{c}{r}".format(C=C, R=R, c=c, r=r) for c in range(2, 5) for r in range(2,5)]) + "__fFiI"):
                 fassert(type(args[0]), args[1:])
 
+    for args in gen_args("Q__f"):
+        fassert(glm.mat3, args)
+        fassert(glm.mat4, args)
+
+    for args in gen_args("Q__F"):
+        fassert(glm.dmat3, args)
+        fassert(glm.dmat4, args)
+
 ## quat
 def test_quat_types():
     for args in gen_args("#u-_V3_M33_M44_NV3_V3V3_NNNN_Q__f"): # need support for conversion constructors
@@ -537,7 +545,7 @@ def test_array_types():
     assert arr.map(lambda x: (x, x) if x.x == 1 else None) == glm.array(glm.vec3(1), glm.vec3(1))
     assert arr.map(lambda x: None) == arr.repeat(0)
     assert arr.map(lambda x: (x.x), ctype = glm.int32) == glm.array.from_numbers(glm.int32, 5, 4, 3, 2, 1)
-    arr.sort(lambda x, y: -(glm.all(glm.lessThan(x, y))))
+    arr.sort(lambda x, y: glm.cmp(x.x, y.x))
     assert arr == glm.array(glm.vec3(1), glm.vec3(2), glm.vec3(3), glm.vec3(4), glm.vec3(5))
 
 
@@ -587,6 +595,13 @@ def test_abs():
         fassert(obj.__abs__, ())
         assert (abs(glm.array(obj)))[0] == abs(obj), obj
 #/abs #
+
+# invert #
+def test_invert():
+    for obj in gen_obj("#MV__iqsuIQSU"):
+        fassert(obj.__invert__, ())
+        assert (abs(glm.array(obj)))[0] == abs(obj), obj
+#/invert #
 
 # add #
 def test_add():
@@ -677,6 +692,41 @@ def test_divmod():
     for obj in gen_obj("#MV__fF"):
         fassert(obj.__divmod__, (1,))
 #/divmod #
+
+# lshift #
+def test_lshift():
+    for obj in gen_obj("#MV__iqsuIQSU"):
+        fassert(obj.__lshift__, (1,))
+        fassert(obj.__lshift__, (obj,))
+#/lshift #
+
+# rshift #
+def test_rshift():
+    for obj in gen_obj("#MV__iqsuIQSU"):
+        fassert(obj.__rshift__, (1,))
+        fassert(obj.__rshift__, (obj,))
+#/rshift #
+
+# and #
+def test_and():
+    for obj in gen_obj("#MV__iqsuIQSU"):
+        fassert(obj.__and__, (1,))
+        fassert(obj.__and__, (obj,))
+#/and #
+
+# or #
+def test_or():
+    for obj in gen_obj("#MV__iqsuIQSU"):
+        fassert(obj.__or__, (1,))
+        fassert(obj.__or__, (obj,))
+#/or #
+
+# xor #
+def test_xor():
+    for obj in gen_obj("#MV__iqsuIQSU"):
+        fassert(obj.__xor__, (1,))
+        fassert(obj.__xor__, (obj,))
+#/xor #
 
 # pow #
 def test_pow():
@@ -1235,6 +1285,10 @@ def test_func_common():
     for args in gen_args("NN_VV_VN_NNN_VVV_NNNN_VVVV__fFiqsuIQSU"):
         fassert(glm.min, args)
         fassert(glm.max, args)
+
+    for args in gen_args("NN_VV_NNN_VVV_NNNN_VVVV_NNNNNNNNNNNN_VVVVVVVVVVVV__fFiqsuIQSU"):
+        fassert(glm.min, (args,))
+        fassert(glm.max, (args,))
 
     for args in gen_args("NN_VV_VN_NNN_VVV_NNNN_VVVV__fF"):
         fassert(glm.fmin, args)

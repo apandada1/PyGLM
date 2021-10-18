@@ -407,9 +407,27 @@ struct PyGLMTypeInfo {
 #if !(PyGLM_BUILD & PyGLM_NO_ITER_TYPECHECKING)
 		if (obj->ob_type != &glmArrayType && PyObject_CheckBuffer(obj)) {
 			Py_buffer view;
+			char* customDataBuffer = NULL;
 			if (PyObject_GetBuffer(obj, &view, PyBUF_RECORDS_RO | PyBUF_F_CONTIGUOUS) == -1) {
 				PyErr_Clear();
-				return;
+				if (PyObject_GetBuffer(obj, &view, PyBUF_RECORDS_RO | PyBUF_C_CONTIGUOUS) == -1) {
+					PyErr_Clear();
+					return;
+				}
+				if (view.ndim != 2) {
+					PyBuffer_Release(&view);
+					return;
+				}
+				char* oldBuffer = reinterpret_cast<char*>(view.buf);
+				customDataBuffer = reinterpret_cast<char*>(dataArray);
+				for (Py_ssize_t R = 0; R < view.shape[0]; R++) {
+					for (Py_ssize_t C = 0; C < view.shape[1]; C++) {
+						memcpy(customDataBuffer + (C * view.shape[0] * view.itemsize) + (R * view.itemsize), oldBuffer, view.itemsize);
+						oldBuffer += view.itemsize;
+					}
+				}
+
+				view.readonly = -1;
 			}
 			switch (view.ndim) {
 			case 1: // one dimensional array (vec / qua)
@@ -794,13 +812,13 @@ struct PyGLMTypeInfo {
 					PyBuffer_Release(&view);
 					return;
 				}
-				switch (view.shape[0]) {
+				switch (view.shape[1]) {
 				case 2: // mat2xM's
 					if (!(accepted_types & PyGLM_SHAPE_2xM)) {
 						PyBuffer_Release(&view);
 						return;
 					}
-					switch (view.shape[1]) {
+					switch (view.shape[0]) {
 					case 2: // mat2x2's
 						if (!(accepted_types & PyGLM_SHAPE_2x2)) {
 							PyBuffer_Release(&view);
@@ -934,7 +952,7 @@ struct PyGLMTypeInfo {
 						PyBuffer_Release(&view);
 						return;
 					}
-					switch (view.shape[1]) {
+					switch (view.shape[0]) {
 					case 2: // mat3x2's
 						if (!(accepted_types & PyGLM_SHAPE_3x2)) {
 							PyBuffer_Release(&view);
@@ -1068,7 +1086,7 @@ struct PyGLMTypeInfo {
 						PyBuffer_Release(&view);
 						return;
 					}
-					switch (view.shape[1]) {
+					switch (view.shape[0]) {
 					case 2: // mat4x2's
 						if (!(accepted_types & PyGLM_SHAPE_4x2)) {
 							PyBuffer_Release(&view);
@@ -1209,7 +1227,7 @@ struct PyGLMTypeInfo {
 			if (view.readonly == 0) {
 				data = view.buf;
 			}
-			else {
+			else if (!customDataBuffer) {
 				allocate(sizeof(view.len));
 				memcpy(data, view.buf, sizeof(view.len));
 			}
@@ -2268,6 +2286,11 @@ constexpr int get_qua_PTI_info() {
 		get_PTI_type<T>();
 }
 
+bool GET_PTI_COMPATIBLE_SIMPLE(PyObject* o, int accepted_types) {
+	int& PTI_info = ((PyGLMTypeObject*)(o->ob_type))->PTI_info;
+	return (PTI_info & accepted_types) == PTI_info;
+}
+
 #if !(PyGLM_BUILD & PyGLM_NO_ITER_TYPECHECKING)
 template<typename T>
 static bool get_view_format_equal(char* value) {
@@ -2337,11 +2360,6 @@ PyObject* ARG3 = NULL;
 bool ARGUSED = true;
 #endif
 
-bool GET_PTI_COMPATIBLE_SIMPLE(PyObject* o, int accepted_types) {
-	int& PTI_info = ((PyGLMTypeObject*)(o->ob_type))->PTI_info;
-	return (PTI_info & accepted_types) == PTI_info;
-}
-
 #ifdef PyGLM_DEBUG
 #define PyGLM_PTI_InitN(N, o, accepted_types) \
 	if (o->ob_type->tp_dealloc == (destructor)vec_dealloc){if (GET_PTI_COMPATIBLE_SIMPLE(o, accepted_types)) {sourceType ## N = PyGLM_VEC;} else {sourceType ## N = NONE;}}\
@@ -2349,7 +2367,7 @@ bool GET_PTI_COMPATIBLE_SIMPLE(PyObject* o, int accepted_types) {
 	else if (o->ob_type->tp_dealloc == (destructor)qua_dealloc) {if (GET_PTI_COMPATIBLE_SIMPLE(o, accepted_types)) {sourceType ## N = PyGLM_QUA;} else {sourceType ## N = NONE;}}\
 	else if (o->ob_type->tp_dealloc == (destructor)mvec_dealloc) {if (GET_PTI_COMPATIBLE_SIMPLE(o, accepted_types)) {sourceType ## N = PyGLM_MVEC;} else {sourceType ## N = NONE;}}\
 	else { PTI ## N = PyGLMTypeInfo(accepted_types, o); if (PTI ## N.info == 0) sourceType ## N = NONE; else sourceType ## N = PTI;};\
-	if (N == 0 && !ARGUSED) throw; ARG ## N = o; ARGUSED = false;
+	if (N == 0 && !ARGUSED) throw; ARG ## N = o; if (N == 0 && sourceType ## N != NONE) {ARGUSED = false;};
 
 bool PyGLM_PTI_DEBUG_EQ_FUNC(PyObject* o, PyObject* arg) {
 	if (o != arg) {
@@ -2454,10 +2472,10 @@ SourceType sourceType2;
 SourceType sourceType3;
 
 #define PyGLM_PTI_InitN(N, o, accepted_types) \
-	if (o->ob_type->tp_dealloc == (destructor)vec_dealloc){if (get_vec_PTI_compatible(o, accepted_types)) {sourceType ## N = PyGLM_VEC;} else {sourceType ## N = NONE;}}\
-	else if (o->ob_type->tp_dealloc == (destructor)mat_dealloc) {if (get_mat_PTI_compatible(o, accepted_types)) {sourceType ## N = PyGLM_MAT;} else {sourceType ## N = NONE;}} \
-	else if (o->ob_type->tp_dealloc == (destructor)qua_dealloc) {if (get_qua_PTI_compatible(o, accepted_types)) {sourceType ## N = PyGLM_QUA;} else {sourceType ## N = NONE;}}\
-	else if (o->ob_type->tp_dealloc == (destructor)mvec_dealloc) {if (get_vec_PTI_compatible(o, accepted_types)) {sourceType ## N = PyGLM_MVEC;} else {sourceType ## N = NONE;}}\
+	if (o->ob_type->tp_dealloc == (destructor)vec_dealloc){if (GET_PTI_COMPATIBLE_SIMPLE(o, accepted_types)) {sourceType ## N = PyGLM_VEC;} else {sourceType ## N = NONE;}}\
+	else if (o->ob_type->tp_dealloc == (destructor)mat_dealloc) {if (GET_PTI_COMPATIBLE_SIMPLE(o, accepted_types)) {sourceType ## N = PyGLM_MAT;} else {sourceType ## N = NONE;}} \
+	else if (o->ob_type->tp_dealloc == (destructor)qua_dealloc) {if (GET_PTI_COMPATIBLE_SIMPLE(o, accepted_types)) {sourceType ## N = PyGLM_QUA;} else {sourceType ## N = NONE;}}\
+	else if (o->ob_type->tp_dealloc == (destructor)mvec_dealloc) {if (GET_PTI_COMPATIBLE_SIMPLE(o, accepted_types)) {sourceType ## N = PyGLM_MVEC;} else {sourceType ## N = NONE;}}\
 	else sourceType ## N = NONE;
 
 
